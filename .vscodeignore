@@ -1,0 +1,11 @@
+.vscode/**
+.gitignore
+esbuild.mjs
+src/**
+scripts/**
+tsconfig.json
+node_modules/**
+package-lock.json
+*.vsix
+dist/**/*.map
+data/cache/**

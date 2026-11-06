@@ -1,0 +1,132 @@
+{
+  "name": "japanese-vs-translator",
+  "displayName": "Japanese VS Dictionary",
+  "description": "Inline Japanese popup dictionary for VS Code: offline JMdict/KANJIDIC lookups, compound tokenization, and deinflection.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "japanese",
+    "dictionary",
+    "jmdict",
+    "kanjidic",
+    "furigana",
+    "hover"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:plaintext",
+    "onLanguage:markdown",
+    "onLanguage:japanese",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact",
+    "onLanguage:json",
+    "onLanguage:jsonc",
+    "onLanguage:yaml",
+    "onLanguage:python",
+    "onLanguage:html",
+    "onLanguage:css",
+    "onLanguage:rust",
+    "onLanguage:go",
+    "onLanguage:java",
+    "onLanguage:csharp",
+    "onLanguage:cpp",
+    "onLanguage:c",
+    "onLanguage:shellscript",
+    "onLanguage:bat",
+    "onLanguage:powershell",
+    "onLanguage:php",
+    "onLanguage:ruby",
+    "onLanguage:swift",
+    "onLanguage:kotlin",
+    "onLanguage:sql",
+    "onLanguage:xml",
+    "onLanguage:ini",
+    "onLanguage:toml",
+    "onLanguage:dockerfile",
+    "onLanguage:makefile",
+    "onLanguage:diff",
+    "onLanguage:git-commit",
+    "onLanguage:latex",
+    "onLanguage:restructuredtext",
+    "onLanguage:csv",
+    "onLanguage:log",
+    "onLanguage:properties"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "japaneseReader.reloadDictionary",
+        "title": "Reload Dictionary",
+        "category": "Japanese Reader"
+      },
+      {
+        "command": "japaneseReader.tokenizeLine",
+        "title": "Tokenize Current Line (Debug)",
+        "category": "Japanese Reader"
+      }
+    ],
+    "configuration": {
+      "title": "Japanese Reader",
+      "properties": {
+        "japaneseReader.dictionaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to a generated dictionary directory (containing words.json and kanji.json). Empty uses data/dict when built, otherwise data/seed."
+        },
+        "japaneseReader.maxWordLength": {
+          "type": "number",
+          "default": 16,
+          "minimum": 1,
+          "maximum": 32,
+          "description": "Longest surface form considered when scanning for compounds."
+        },
+        "japaneseReader.maxResults": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of dictionary entries (homographs) shown in a hover."
+        },
+        "japaneseReader.maxDefinitions": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 30,
+          "description": "Maximum number of numbered definitions shown per entry."
+        },
+        "japaneseReader.showKanjiDetails": {
+          "type": "boolean",
+          "default": true,
+          "description": "Append KANJIDIC character profiles (strokes, grade, readings, meanings) to hovers."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "node esbuild.mjs --production",
+    "build:dict": "node scripts/build-dictionary.mjs",
+    "smoke": "tsx scripts/smoke.ts",
+    "vsix": "npm run typecheck && npx --yes @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
