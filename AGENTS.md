@@ -171,7 +171,8 @@ promise; **Reload Dictionary** forces a fresh load.
 - Hover is single-line; words split across lines are not matched.
 - Only the listed language IDs activate the extension.
 - No VS Code integration-test harness; `npm run smoke` covers core logic only.
-- Marketplace metadata is not ready: `publisher` is still `local`, there is no
-  `repository` field, and no icon. See `PUBLISHING.md`.
+- Marketplace: publisher is `jacobdemille` and repository metadata is set, but
+  there is no icon yet and the first publish still needs a Marketplace PAT. See
+  `PUBLISHING.md`.
 - Optional: add an `install:windows` npm script to automate the copy + install
   flow documented above.

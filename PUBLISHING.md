@@ -6,33 +6,33 @@ a developer checklist, not legal advice.
 
 ## 1. Publisher identity
 
-The Marketplace will not accept a local-only publisher id.
+The publisher is registered as **`jacobdemille`**, so `package.json` uses
+`"publisher": "jacobdemille"` and the extension id is
+`jacobdemille.japanese-vs-translator`.
 
-1. Create a publisher at <https://marketplace.visualstudio.com/manage>.
-2. Create an Azure DevOps personal access token (PAT) with **Marketplace:
+Remaining steps for a release:
+
+1. Create an Azure DevOps personal access token (PAT) with **Marketplace:
    Manage** scope.
-3. Change `publisher` in `package.json` from `local` to the registered publisher
-   id (for example, `jacobdemille`).
-4. Add the repository metadata so the Marketplace listing links back to source:
-
-   ```json
-   "repository": {
-     "type": "git",
-     "url": "https://github.com/<owner>/japanese-vs-translator.git"
-   }
-   ```
-
-5. Log in and publish:
+2. Log in and publish:
 
    ```bash
-   npx @vscode/vsce login <publisher-id>
+   npx @vscode/vsce login jacobdemille
    npm run vsix
    npx @vscode/vsce publish
    ```
 
-The extension id will become `<publisher-id>.japanese-vs-translator`. Local
-installs of the old `local.japanese-vs-translator` id will not update
-automatically; reinstall the Marketplace build.
+Repository metadata is already set:
+
+```json
+"repository": {
+  "type": "git",
+  "url": "https://github.com/JacobDeMille/japanese-vs-translator.git"
+}
+```
+
+Local installs of the old `local.japanese-vs-translator` id will not update
+automatically; uninstall it and install the Marketplace build instead.
 
 ## 2. Marketplace presentation
 

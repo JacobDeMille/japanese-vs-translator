@@ -21,7 +21,7 @@ Once published, install **Japanese VS Dictionary** from the VS Code
 Marketplace, or run:
 
 ```bash
-code --install-extension <publisher>.japanese-vs-translator
+code --install-extension jacobdemille.japanese-vs-translator
 ```
 
 For local development and packaging, see [Development](#development).
