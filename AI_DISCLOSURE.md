@@ -13,7 +13,7 @@ reviewing or redistributing the project.
 | Provider | `opencode` |
 | Model ID | `opencode/big-pickle` |
 | Development period | November 2026 |
-| Human maintainer | Jacob DeMille (`jbat4`) |
+| Human maintainer | Jacob DeMille (@JacobDeMille) |
 
 The model name above is the identifier exposed by the development environment.
 The provider does not expose a separate underlying LLM name in this setup, so
