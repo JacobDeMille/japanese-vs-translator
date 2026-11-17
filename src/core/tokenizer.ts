@@ -16,6 +16,32 @@ export function isKanjiChar(character: string): boolean {
   return /\p{Script=Han}/u.test(character);
 }
 
+const KATAKANA_RUN_CHAR = /[\p{Script=Katakana}\u30fc]/u;
+
+export interface KatakanaRun {
+  start: number;
+  end: number;
+  surface: string;
+}
+
+/** The maximal run of katakana (including the long-vowel mark) around a cursor. */
+export function katakanaRunAt(text: string, character: number): KatakanaRun | undefined {
+  const position = Math.min(Math.max(character, 0), text.length - 1);
+  if (position < 0 || !KATAKANA_RUN_CHAR.test(text[position])) {
+    return undefined;
+  }
+
+  let start = position;
+  while (start > 0 && KATAKANA_RUN_CHAR.test(text[start - 1])) {
+    start--;
+  }
+  let end = position + 1;
+  while (end < text.length && KATAKANA_RUN_CHAR.test(text[end])) {
+    end++;
+  }
+  return { start, end, surface: text.slice(start, end) };
+}
+
 export interface WordMatch {
   start: number;
   end: number;
@@ -162,6 +188,41 @@ export function findWordAt(
   }
 
   return best;
+}
+
+/**
+ * Detects a misleading short match inside a longer unknown katakana word.
+ * For example, スポティファイ is in neither JMdict nor JMnedict, so the
+ * longest direct match is スポ. Returning the full run lets the hover show a
+ * "no entry" card instead of a wrong 2-character definition. Common short
+ * words (priority >= 2) and genuine compounds such as テレビゲーム are kept.
+ */
+export function weakKatakanaPrefix(
+  dictionary: DictionaryIndex,
+  text: string,
+  character: number,
+  match: WordMatch | undefined,
+): KatakanaRun | undefined {
+  if (!match || match.type !== null) {
+    return undefined;
+  }
+  const run = katakanaRunAt(text, character);
+  if (!run || run.surface.length < 4) {
+    return undefined;
+  }
+  if (match.start !== run.start || match.end >= run.end) {
+    return undefined;
+  }
+  if (match.end - match.start > 2) {
+    return undefined;
+  }
+  if ((match.entries[0]?.priority ?? 0) >= 2) {
+    return undefined;
+  }
+  if (dictionary.lookup(run.surface).length > 0) {
+    return undefined;
+  }
+  return run;
 }
 
 /** Greedy longest-match tokenizer used by the debug command and tests. */

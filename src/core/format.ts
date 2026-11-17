@@ -2,10 +2,13 @@ import type { DictionaryEntry, DictionaryIndex } from "./dictionary";
 import type { RawKanji } from "./types";
 import { isKanjiChar, type WordMatch } from "./tokenizer";
 
+export type ThemeKind = "dark" | "light";
+
 export interface RenderOptions {
   maxDefinitions: number;
   maxResults: number;
   showKanjiDetails: boolean;
+  theme: ThemeKind;
 }
 
 const POS_LABELS: Record<string, string> = {
@@ -23,7 +26,7 @@ const POS_LABELS: Record<string, string> = {
   "v5k-s": "godan verb",
   v5g: "godan verb",
   v5s: "godan verb",
-  "v5t": "godan verb",
+  v5t: "godan verb",
   v5n: "godan verb",
   v5b: "godan verb",
   v5m: "godan verb",
@@ -55,13 +58,92 @@ const POS_LABELS: Record<string, string> = {
   "aux-v": "auxiliary verb",
   "aux-adj": "auxiliary adjective",
   uk: "usually kana",
+  // JMnedict name types (katakana proper-noun supplement).
+  name: "name",
+  surname: "surname",
+  given: "given name",
+  masc: "male name",
+  fem: "female name",
+  person: "person name",
+  place: "place name",
+  product: "product name",
+  company: "company",
+  organization: "organization",
+  group: "group",
+  work: "work title",
+  char: "character",
+  creat: "creature",
+  dei: "deity",
+  myth: "mythology",
+  leg: "legend",
+  fict: "fiction",
+  obj: "object",
+  relig: "religion",
+  serv: "service",
+  ship: "ship name",
+  station: "station",
+  doc: "document",
+  ev: "event",
+  oth: "other name",
+  unclass: "name",
 };
+
+interface CardPalette {
+  /** Kanji headword. */
+  headword: string;
+  /** Kana reading. */
+  reading: string;
+  /** Definitions and kanji meanings. */
+  body: string;
+  /** Secondary facts and metadata. */
+  muted: string;
+  /** Deinflection/conjugation notes. */
+  note: string;
+}
+
+/**
+ * 10ten-style palettes. Dark values mirror 10ten's black theme; light values
+ * mirror its light-blue theme. Hex values are on the hover renderer's
+ * whitelist (it only keeps `color`, `background-color`, `display:inline-block`,
+ * and `border-radius` on spans), and the hover provider picks the palette from
+ * the active VS Code theme.
+ */
+const PALETTES: Record<ThemeKind, CardPalette> = {
+  dark: {
+    headword: "#4bbffb",
+    reading: "#7beb7e",
+    body: "#ffffff",
+    muted: "#9d9d9d",
+    note: "#c1a4a0",
+  },
+  light: {
+    headword: "#17588e",
+    reading: "#2e7d32",
+    body: "#1d1a19",
+    muted: "#6b6b6b",
+    note: "#817470",
+  },
+};
+
+function colored(text: string, color: string): string {
+  return `<span style="color:${color};">${text}</span>`;
+}
+
+/** A small pill for part-of-speech tags, using the theme's badge colors. */
+function badge(text: string): string {
+  return (
+    '<span style="color:var(--vscode-badge-foreground);' +
+    "background-color:var(--vscode-badge-background);" +
+    'display:inline-block;border-radius:4px;">' +
+    `&nbsp;${text}&nbsp;</span>`
+  );
+}
 
 function escapeMarkdown(text: string): string {
   return text.replace(/[\\`*_[\]<>]/g, "\\$&");
 }
 
-function renderKanji(char: string, raw: RawKanji): string {
+function renderKanji(char: string, raw: RawKanji, palette: CardPalette): string {
   const [strokes, grade, frequency, on, kun, meanings] = raw;
   const facts: string[] = [];
   if (strokes > 0) {
@@ -76,7 +158,11 @@ function renderKanji(char: string, raw: RawKanji): string {
     facts.push(`freq #${frequency}`);
   }
 
-  const lines = [`**${char}**${facts.length > 0 ? ` · ${facts.join(" · ")}` : ""}`];
+  const header =
+    colored(`<strong>${escapeMarkdown(char)}</strong>`, palette.headword) +
+    (facts.length > 0 ? colored(` · ${facts.join(" · ")}`, palette.muted) : "");
+  const lines = [header];
+
   const readings: string[] = [];
   if (on.length > 0) {
     readings.push(`on ${on.join("、")}`);
@@ -85,30 +171,35 @@ function renderKanji(char: string, raw: RawKanji): string {
     readings.push(`kun ${kun.join("、")}`);
   }
   if (readings.length > 0) {
-    lines.push(readings.join(" · "));
+    lines.push(colored(readings.join(" · "), palette.reading));
   }
   if (meanings.length > 0) {
-    lines.push(escapeMarkdown(meanings.slice(0, 6).join(", ")));
+    lines.push(colored(escapeMarkdown(meanings.slice(0, 6).join(", ")), palette.body));
   }
   return lines.join("\n");
 }
 
-function renderEntry(entry: DictionaryEntry, match: WordMatch, options: RenderOptions): string {
+function renderEntry(
+  entry: DictionaryEntry,
+  match: WordMatch,
+  options: RenderOptions,
+  palette: CardPalette,
+): string {
   const headword = entry.kanji[0] ?? entry.kana[0] ?? match.base;
   const reading = entry.kana[0] ?? "";
+  const headwordHtml = colored(`<strong>${escapeMarkdown(headword)}</strong>`, palette.headword);
   const title = reading && reading !== headword
-    ? `**${escapeMarkdown(headword)}**（${escapeMarkdown(reading)}）`
-    : `**${escapeMarkdown(headword)}**`;
+    ? `${headwordHtml}（${colored(escapeMarkdown(reading), palette.reading)}）`
+    : headwordHtml;
 
   const lines = [title];
 
   if (match.matched !== headword) {
     const labels = [...new Set(match.reasons)].reverse().join(" + ");
-    lines.push(
-      labels
-        ? `_${escapeMarkdown(match.matched)} · ${escapeMarkdown(labels)}_`
-        : `_matched: ${escapeMarkdown(match.matched)}_`,
-    );
+    const note = labels
+      ? `${escapeMarkdown(match.matched)} · ${escapeMarkdown(labels)}`
+      : `matched: ${escapeMarkdown(match.matched)}`;
+    lines.push(colored(`<em>${note}</em>`, palette.note));
   }
 
   const tags = [...new Set(entry.pos.map((pos) => POS_LABELS[pos] ?? pos))].slice(0, 5);
@@ -116,12 +207,12 @@ function renderEntry(entry: DictionaryEntry, match: WordMatch, options: RenderOp
     tags.push("common");
   }
   if (tags.length > 0) {
-    lines.push(tags.map((tag) => `\`${tag}\``).join(" "));
+    lines.push(tags.map((tag) => badge(escapeMarkdown(tag))).join(" "));
   }
 
   const definitions = entry.glosses
     .slice(0, options.maxDefinitions)
-    .map((gloss, index) => `${index + 1}. ${escapeMarkdown(gloss)}`);
+    .map((gloss, index) => `${index + 1}. ${colored(escapeMarkdown(gloss), palette.body)}`);
   if (definitions.length > 0) {
     lines.push(definitions.join("\n"));
   }
@@ -135,8 +226,9 @@ export function renderWord(
   dictionary: DictionaryIndex,
   options: RenderOptions,
 ): string {
+  const palette = PALETTES[options.theme];
   const entries = match.entries.slice(0, options.maxResults);
-  const parts = entries.map((entry) => renderEntry(entry, match, options));
+  const parts = entries.map((entry) => renderEntry(entry, match, options, palette));
 
   if (options.showKanjiDetails) {
     const characters = new Set<string>();
@@ -153,7 +245,7 @@ export function renderWord(
     for (const char of characters) {
       const raw = dictionary.kanjiFor(char);
       if (raw) {
-        profiles.push(renderKanji(char, raw));
+        profiles.push(renderKanji(char, raw, palette));
         count++;
       }
       if (count >= 4) {
@@ -169,6 +261,16 @@ export function renderWord(
 }
 
 /** Fallback card when the cursor is on a kanji with no word entry. */
-export function renderKanjiOnly(char: string, raw: RawKanji): string {
-  return renderKanji(char, raw);
+export function renderKanjiOnly(char: string, raw: RawKanji, theme: ThemeKind): string {
+  return renderKanji(char, raw, PALETTES[theme]);
+}
+
+/** Card for a katakana run that is in neither dictionary. */
+export function renderUnknownWord(surface: string, theme: ThemeKind): string {
+  const palette = PALETTES[theme];
+  return (
+    colored(`<strong>${escapeMarkdown(surface)}</strong>`, palette.headword) +
+    "\n\n" +
+    colored("No dictionary entry found.", palette.muted)
+  );
 }

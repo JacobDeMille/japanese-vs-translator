@@ -26,8 +26,10 @@ const SEED_DIR = join(ROOT, "data", "seed");
 
 const JMdict_URL = "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz";
 const KANJIDIC_URL = "https://www.edrdg.org/pub/Nihongo/kanjidic2.xml.gz";
+const JMNEDICT_URL = "https://www.edrdg.org/pub/Nihongo/JMnedict.xml.gz";
 const JMdict_FILE = join(CACHE_DIR, "JMdict_e.gz");
 const KANJIDIC_FILE = join(CACHE_DIR, "kanjidic2.xml.gz");
+const JMNEDICT_FILE = join(CACHE_DIR, "JMnedict.xml.gz");
 
 const MUST_INCLUDE = [
   "食べる", "飲む", "行く", "来る", "する", "見る", "聞く", "話す", "読む", "書く",
@@ -37,6 +39,8 @@ const MUST_INCLUDE = [
   "小さい", "高い", "安い", "新しい", "古い", "良い", "悪い", "静か", "元気", "美味しい",
   "面白い", "可愛い", "ありがとう", "こんにちは", "は", "が", "を", "に", "で", "と",
   "も", "の", "から", "まで", "ね", "よ",
+  // Katakana names demonstrate the JMnedict supplement in the seed fallback.
+  "ナルト", "ミッキー", "マリオ", "ゼルダ", "ピカチュウ", "ソニック",
 ];
 
 async function ensureDownload(url, file) {
@@ -208,6 +212,79 @@ async function parseJmdict(file) {
   return entries;
 }
 
+const KATAKANA_FORM = /^[\p{Script=Katakana}\u30fc]+$/u;
+
+/**
+ * Builds a katakana-only supplement from JMnedict. Proper nouns (characters,
+ * works, brands, places) are almost entirely absent from JMdict, which made
+ * lookups fall back to an unrelated short prefix. Keeping only entries with a
+ * katakana form adds real names without pulling in the full 700k-entry names
+ * dictionary.
+ */
+async function parseNedict(file, existingSurfaces) {
+  const entities = parseEntities(await readHead(file));
+  const entries = [];
+  let total = 0;
+
+  for await (const block of xmlBlocks(file, "entry")) {
+    total++;
+    const katakana = [...block.matchAll(/<(?:keb|reb)>([\s\S]*?)<\/(?:keb|reb)>/g)]
+      .map((match) => decode(match[1], entities).trim())
+      .filter(
+        (form) =>
+          form.length >= 2 &&
+          KATAKANA_FORM.test(form) &&
+          !existingSurfaces.has(form),
+      );
+    if (katakana.length === 0) {
+      continue;
+    }
+
+    const kanji = [...block.matchAll(/<keb>([\s\S]*?)<\/keb>/g)]
+      .map((match) => decode(match[1], entities).trim())
+      .filter(
+        (form) =>
+          form &&
+          !KATAKANA_FORM.test(form) &&
+          !existingSurfaces.has(form),
+      );
+
+    const nameTypes = new Set();
+    for (const match of block.matchAll(/<name_type>([\s\S]*?)<\/name_type>/g)) {
+      const raw = match[1].trim();
+      const entity = /^&([A-Za-z][\w-]*);$/.exec(raw);
+      const value = entity ? entity[1] : decode(raw, entities).trim();
+      if (value) {
+        nameTypes.add(value);
+      }
+    }
+
+    const glosses = [];
+    for (const trans of block.split("<trans>").slice(1)) {
+      const details = [...trans.matchAll(/<trans_det>([\s\S]*?)<\/trans_det>/g)]
+        .map((match) => decode(match[1], entities).trim())
+        .filter(Boolean);
+      if (details.length > 0) {
+        glosses.push(details.join("; "));
+      }
+    }
+    if (glosses.length === 0) {
+      continue;
+    }
+
+    entries.push([
+      [...new Set(kanji)],
+      [...new Set(katakana)],
+      nameTypes.size > 0 ? [...nameTypes] : ["name"],
+      glosses,
+      0,
+    ]);
+  }
+
+  console.log(`JMnedict: parsed ${total} entries, kept ${entries.length} katakana names`);
+  return entries;
+}
+
 async function parseKanjidic(file) {
   const entities = parseEntities(await readHead(file));
   const kanji = {};
@@ -250,7 +327,7 @@ async function parseKanjidic(file) {
   return kanji;
 }
 
-async function writeFullDictionary(entries, kanji) {
+async function writeFullDictionary(entries, kanji, nameCount) {
   await mkdir(FULL_DIR, { recursive: true });
   await writeFile(join(FULL_DIR, "words.json"), JSON.stringify(entries));
   await writeFile(join(FULL_DIR, "kanji.json"), JSON.stringify(kanji));
@@ -260,9 +337,10 @@ async function writeFullDictionary(entries, kanji) {
       {
         version: 1,
         generatedAt: new Date().toISOString(),
-        sources: { words: JMdict_URL, kanji: KANJIDIC_URL },
-        license: "JMdict/KANJIDIC2 (c) EDRDG, CC BY-SA 4.0",
+        sources: { words: JMdict_URL, kanji: KANJIDIC_URL, names: JMNEDICT_URL },
+        license: "JMdict/KANJIDIC2/JMnedict (c) EDRDG, CC BY-SA 4.0",
         entries: entries.length,
+        names: nameCount,
         kanji: Object.keys(kanji).length,
       },
       null,
@@ -334,17 +412,29 @@ async function main() {
 
   await ensureDownload(JMdict_URL, JMdict_FILE);
   await ensureDownload(KANJIDIC_URL, KANJIDIC_FILE);
+  await ensureDownload(JMNEDICT_URL, JMNEDICT_FILE);
 
-  const entries = await parseJmdict(JMdict_FILE);
+  const words = await parseJmdict(JMdict_FILE);
+  const jmdictSurfaces = new Set();
+  for (const entry of words) {
+    for (const form of [...entry[0], ...entry[1]]) {
+      jmdictSurfaces.add(form);
+    }
+  }
+  const names = await parseNedict(JMNEDICT_FILE, jmdictSurfaces);
+  const entries = [...words, ...names];
   const kanji = await parseKanjidic(KANJIDIC_FILE);
 
-  await writeFullDictionary(entries, kanji);
+  await writeFullDictionary(entries, kanji, names.length);
   const seed = buildSeed(entries, kanji);
   await mkdir(SEED_DIR, { recursive: true });
   await writeFile(join(SEED_DIR, "words.json"), JSON.stringify(seed.entries));
   await writeFile(join(SEED_DIR, "kanji.json"), JSON.stringify(seed.kanji));
 
-  console.log(`full: ${entries.length} words, ${Object.keys(kanji).length} kanji -> ${FULL_DIR}`);
+  console.log(
+    `full: ${entries.length} words (${words.length} JMdict + ${names.length} names), ` +
+      `${Object.keys(kanji).length} kanji -> ${FULL_DIR}`,
+  );
   console.log(
     `seed: ${seed.entries.length} words, ${Object.keys(seed.kanji).length} kanji -> ${SEED_DIR}`,
   );

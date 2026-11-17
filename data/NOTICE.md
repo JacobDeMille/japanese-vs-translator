@@ -4,12 +4,14 @@ The generated files in `data/` are derived from:
 
 - **JMdict** (Japanese-Multilingual Dictionary), English edition
   <https://www.edrdg.org/jmdict/j_jmdict.html>
+- **JMnedict** (Japanese Proper Names Dictionary)
+  <https://www.edrdg.org/enamdict/enamdict_doc.html>
 - **KANJIDIC2** (Kanji dictionary)
   <https://www.edrdg.org/wiki/index.php/KANJIDIC_Project>
 
-Both datasets are copyright the Electronic Dictionary Research and Development
-Group (EDRDG) and are distributed under the Creative Commons Attribution-ShareAlike
-4.0 International License (CC BY-SA 4.0):
+All three datasets are copyright the Electronic Dictionary Research and
+Development Group (EDRDG) and are distributed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0):
 
 <https://www.edrdg.org/edrdg/licence.html>
 

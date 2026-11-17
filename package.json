@@ -1,10 +1,18 @@
 {
   "name": "japanese-vs-translator",
   "displayName": "Japanese VS Dictionary",
-  "description": "Inline Japanese popup dictionary for VS Code: offline JMdict/KANJIDIC lookups, compound tokenization, and deinflection.",
-  "version": "0.1.0",
+  "description": "Inline Japanese popup dictionary for VS Code: offline JMdict/JMnedict/KANJIDIC lookups, compound tokenization, and deinflection.",
+  "version": "0.1.3",
   "publisher": "local",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JacobDeMille/japanese-vs-translator.git"
+  },
+  "homepage": "https://github.com/JacobDeMille/japanese-vs-translator#readme",
+  "bugs": {
+    "url": "https://github.com/JacobDeMille/japanese-vs-translator/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -15,6 +23,7 @@
     "japanese",
     "dictionary",
     "jmdict",
+    "jmnedict",
     "kanjidic",
     "furigana",
     "hover"

@@ -12,7 +12,7 @@ Markdown cards.
 
 - Repo: `/home/jbat4/code/japanese-vs-translator` (WSL), git repo on `main`.
 - VS Code extension id: `local.japanese-vs-translator`.
-- Current version: `0.1.0`.
+- Current version: `0.1.3`.
 - Initial commit: `4407d8d` "Build offline Japanese hover dictionary".
 - Git identity is configured locally (Jacob DeMille / GitHub noreply email).
 - Build session id: `ses_e50f12dd1ffe5ui4cX4BpOoSz8` (OpenCode persists sessions;
@@ -22,7 +22,7 @@ Markdown cards.
 
 ```bash
 npm install
-npm run build:dict    # download + compile JMdict/KANJIDIC2 (cached, idempotent)
+npm run build:dict    # download + compile JMdict/JMnedict/KANJIDIC2 (cached, idempotent)
 npm run typecheck     # tsc --noEmit
 npm run compile       # esbuild -> dist/extension.js (clears dist first)
 npm run watch         # esbuild watch
@@ -34,8 +34,8 @@ Packaging/install on Windows from WSL:
 
 ```bash
 npm run vsix
-cp japanese-vs-translator-0.1.0.vsix /mnt/c/Users/jbat4/Downloads/
-code --install-extension 'C:\Users\jbat4\Downloads\japanese-vs-translator-0.1.0.vsix'
+cp japanese-vs-translator-0.1.3.vsix /mnt/c/Users/jbat4/Downloads/
+code --install-extension 'C:\Users\jbat4\Downloads\japanese-vs-translator-0.1.3.vsix'
 ```
 
 Windows VS Code cannot open a VSIX from `\\wsl.localhost\...`
@@ -50,15 +50,17 @@ src/core/types.ts          tuple data formats shared with the build script
 src/core/deinflect.ts      conjugation rules + BFS deinflection with type chaining
 src/core/dictionary.ts     loads words.json/kanji.json, builds surface -> id Map
 src/core/lookup.ts         direct + deinflected lookup, POS compatibility filter
-src/core/tokenizer.ts      cursor-centred longest match, greedy line tokenizer
-src/core/format.ts         Markdown hover card rendering
-src/providers/hoverProvider.ts  VS Code HoverProvider + kanji fallback
+src/core/tokenizer.ts      cursor-centred longest match, katakana run helpers
+src/core/format.ts         theme-aware Markdown/HTML hover card rendering
+src/providers/hoverProvider.ts  VS Code HoverProvider + kanji/unknown fallbacks
 src/extension.ts           activation, provider/commands, dictionary lifecycle
 scripts/build-dictionary.mjs    streaming EDRDG XML -> compact JSON + seed
 scripts/smoke.ts                node:assert smoke test + lookup benchmark
 data/seed/                 committed fallback (900 words / 400 kanji)
-data/dict/                 generated full data (gitignored, ~22 MB)
+data/dict/                 generated full data (gitignored, ~25 MB)
 data/cache/                downloaded .gz files (gitignored)
+AI_DISCLOSURE.md           AI provenance statement (shipped in the VSIX)
+PUBLISHING.md              Marketplace/licensing checklist (dev-only)
 ```
 
 Core modules must stay free of `vscode` imports so `scripts/smoke.ts` can run
@@ -76,11 +78,16 @@ RawKanji = [strokes: number, grade: number, frequency: number,
 - One `glosses` item per JMdict sense; multiple glosses in a sense are joined
   with `"; "`.
 - `priority`: 3 = `ichi1`/`news1`/`spec1`, 2 = `nfXX`/`ichi2`/`news2`/`spec2`/
-  `gai1`, 0 otherwise. Used for ordering and the `common` tag.
+  `gai1`, 0 otherwise. Used for ordering and the `common` tag. JMnedict name
+  entries always use 0.
 - Entry id is its array index in `words.json`. The surface index is rebuilt at
   load, so editing/reordering the JSON is safe, but keep it consistent.
-- Full build currently yields **219,028 entries / 13,108 kanji**; the seed is
-  900 common entries + 400 kanji (includes a `MUST_INCLUDE` demo word list).
+- Full build currently yields **290,057 entries (219,028 JMdict + 71,029
+  JMnedict names) / 13,108 kanji**; the seed is 900 common entries + 400 kanji
+  (includes a `MUST_INCLUDE` demo word list plus six katakana names).
+- JMnedict filter: keep only entries with a katakana form of length >= 2 and a
+  surface not already in JMdict. `name_type` entities become the entry's `pos`
+  (e.g. `work`, `masc`, `fem`, `place`, `company`), rendered as badges.
 - Loader resolution order: `japaneseReader.dictionaryPath` → `data/dict` when
   `manifest.json` exists → `data/seed`.
 
@@ -104,6 +111,12 @@ RawKanji = [strokes: number, grade: number, frequency: number,
   the surface `Map` lookup (measured ~0.1 µs) plus this cache.
 - `tokenizeLine` is a greedy longest-match over direct **and** deinflected spans,
   used by the debug command and smoke test, not by hover.
+- Katakana fallback: `katakanaRunAt` returns the maximal katakana run around the
+  cursor. `weakKatakanaPrefix` flags a direct match that is only 1–2 characters
+  at the start of a 4+ character run, has priority < 2, and whose full run is
+  not indexed. Hover then shows `renderUnknownWord` ("No dictionary entry
+  found.") over the whole run instead of a wrong prefix such as スポ for
+  スポティファイ. Genuine longer prefixes (テレビ in テレビゲーム) are kept.
 
 ## Hover behaviour and rendering
 
@@ -111,10 +124,22 @@ RawKanji = [strokes: number, grade: number, frequency: number,
   returns nothing unless the character at the cursor is Japanese.
 - Hover range is the matched surface, so only that span is highlighted.
 - Card layout: `**headword**（reading）`, optional inflected-form note, POS tags
-  (+ `common`), numbered definitions, then KANJIDIC profiles for up to 4 kanji.
-- Kanji-only fallback shows the KANJIDIC card when no word entry exists.
-- Markdown is untrusted (`isTrusted = false`); escape glosses/readings before
-  injecting them.
+  (+ `common`, or a JMnedict name type), numbered definitions, then KANJIDIC
+  profiles for up to 4 kanji.
+- Kanji-only fallback shows the KANJIDIC card when no word entry exists;
+  unknown katakana runs show the full run with "No dictionary entry found."
+- Theme-aware colors: the palette is chosen per hover from
+  `vscode.window.activeColorTheme.kind` (`Light`/`HighContrastLight` → light,
+  otherwise dark). Dark mirrors 10ten's black theme (headword `#4bbffb`,
+  reading `#7beb7e`, definitions `#ffffff`, note `#c1a4a0`, muted `#9d9d9d`);
+  light mirrors the light-blue theme (`#17588e`, `#2e7d32`, `#1d1a19`,
+  `#817470`, `#6b6b6b`). POS badges use `var(--vscode-badge-*)`.
+- Rendering uses `MarkdownString.supportHtml = true` with VS Code's sanitized
+  `<span style>` subset. The sanitizer only keeps `style` on `<span>` with
+  `color:` first, then optional `background-color:`, `display:inline-block;`,
+  and `border-radius:Npx;`, `#hex`/`var(--vscode-...)` values, and no spaces.
+  Markdown itself stays untrusted (`isTrusted = false`); escape glosses and
+  readings before injecting them.
 - Activation is language-scoped in `package.json` (`onLanguage:...` list). New
   file types need an activation entry, otherwise hover never activates there.
 
@@ -127,17 +152,26 @@ promise; **Reload Dictionary** forces a fresh load.
 ## Licensing — do not remove
 
 - Code: MIT (`LICENSE`).
-- Generated data: JMdict/KANJIDIC2 © EDRDG, CC BY-SA 4.0. See
+- Generated data: JMdict/JMnedict/KANJIDIC2 © EDRDG, CC BY-SA 4.0. See
   `data/NOTICE.md` and `README.md`. Any redistribution must keep attribution.
-- 10ten is inspiration only; this code is original and not affiliated.
+- 10ten is inspiration only; this code is original and not affiliated. 10ten is
+  GPL-3.0. Because no 10ten code is copied, MIT is valid here; relicensing to
+  GPL-3.0 is only required if GPL code is ever incorporated. See
+  `PUBLISHING.md` for the full checklist.
+- AI provenance: `AI_DISCLOSURE.md` records the agent (OpenCode) and model
+  (Big Pickle, `opencode/big-pickle`). Keep it in published packages alongside
+  the README.
 
 ## Known limitations / likely next work
 
-- No JMdict **names** dictionary, no pitch accents, no per-kanji furigana
+- JMnedict coverage is katakana-only; kanji-written names and names with no
+  katakana form are not included. No pitch accents, no per-kanji furigana
   alignment (whole-word reading is shown instead).
 - Homographs are ranked by priority only; no sense-level disambiguation.
 - Hover is single-line; words split across lines are not matched.
 - Only the listed language IDs activate the extension.
 - No VS Code integration-test harness; `npm run smoke` covers core logic only.
+- Marketplace metadata is not ready: `publisher` is still `local`, there is no
+  `repository` field, and no icon. See `PUBLISHING.md`.
 - Optional: add an `install:windows` npm script to automate the copy + install
   flow documented above.

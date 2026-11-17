@@ -1,7 +1,15 @@
 import * as vscode from "vscode";
 import type { DictionaryIndex } from "../core/dictionary";
-import { renderKanjiOnly, renderWord } from "../core/format";
-import { findWordAt, isJapaneseChar } from "../core/tokenizer";
+import { renderKanjiOnly, renderUnknownWord, renderWord, type ThemeKind } from "../core/format";
+import { findWordAt, isJapaneseChar, weakKatakanaPrefix } from "../core/tokenizer";
+
+function activeTheme(): ThemeKind {
+  const kind = vscode.window.activeColorTheme.kind;
+  return kind === vscode.ColorThemeKind.Light ||
+    kind === vscode.ColorThemeKind.HighContrastLight
+    ? "light"
+    : "dark";
+}
 
 export class JapaneseHoverProvider implements vscode.HoverProvider {
   constructor(
@@ -32,6 +40,20 @@ export class JapaneseHoverProvider implements vscode.HoverProvider {
         maxWordLength: config.get<number>("maxWordLength", 16),
         maxEntries,
       });
+      const theme = activeTheme();
+
+      const unknownRun = weakKatakanaPrefix(dictionary, line, character, match);
+      if (unknownRun) {
+        const markdown = new vscode.MarkdownString(
+          renderUnknownWord(unknownRun.surface, theme),
+        );
+        markdown.supportHtml = true;
+        markdown.isTrusted = false;
+        return new vscode.Hover(
+          markdown,
+          new vscode.Range(position.line, unknownRun.start, position.line, unknownRun.end),
+        );
+      }
 
       if (match) {
         const markdown = new vscode.MarkdownString(
@@ -39,8 +61,11 @@ export class JapaneseHoverProvider implements vscode.HoverProvider {
             maxDefinitions: config.get<number>("maxDefinitions", 8),
             maxResults: maxEntries,
             showKanjiDetails: config.get<boolean>("showKanjiDetails", true),
+            theme,
           }),
         );
+        // The card uses theme-colored <span> tags from a sanitized whitelist.
+        markdown.supportHtml = true;
         markdown.isTrusted = false;
         return new vscode.Hover(
           markdown,
@@ -50,7 +75,10 @@ export class JapaneseHoverProvider implements vscode.HoverProvider {
 
       const profile = dictionary.kanjiFor(line[character]);
       if (profile) {
-        const markdown = new vscode.MarkdownString(renderKanjiOnly(line[character], profile));
+        const markdown = new vscode.MarkdownString(
+          renderKanjiOnly(line[character], profile, theme),
+        );
+        markdown.supportHtml = true;
         markdown.isTrusted = false;
         return new vscode.Hover(
           markdown,
